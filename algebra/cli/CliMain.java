@@ -11,7 +11,7 @@ import util.STDIN;
  * Main
  */
 public class CliMain {
-    static final String cwd = ".\\MatrixData";
+    static final String cwd = ".\\AlgebraData";
 
     public static void main(String[] args) {
         Menu.showWelcome();

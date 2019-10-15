@@ -38,7 +38,7 @@ public class GuiMain {
 		Matrix operate(Matrix mat);
 	}
 
-	static final String cwd = ".\\MatrixData";
+	static final String cwd = ".\\AlgebraData";
 
 	/**
 	 * Launch the application.
@@ -107,6 +107,8 @@ public class GuiMain {
 	private final JButton buttonDeleteFraction = new JButton("\u5220\u9664\u53D8\u91CF");
 
 	DefaultListModel<String> fractionListCore = new DefaultListModel<String>();
+	private final JMenuItem menuItemModifyMatrix = new JMenuItem("\u4FEE\u6539\u77E9\u9635");
+	private final JMenuItem menuItemDeleteMatrix = new JMenuItem("\u5220\u9664\u77E9\u9635");
 
 	/**
 	 * Create the application.
@@ -126,7 +128,7 @@ public class GuiMain {
 		boolean[] appeared = new boolean[128];
 		Arrays.fill(appeared, false);
 		for (String x : arr) {
-			if (x.matches("NewMatrix\\d+")) {
+			if (x.matches("[Nn]ewMatrix\\d+")) {
 				int pos = x.lastIndexOf('x');
 				appeared[Integer.parseInt(x.substring(pos + 1))] = true;
 			}
@@ -171,6 +173,43 @@ public class GuiMain {
 				}
 			}
 		});
+
+		JMenuItem menuItemNewMatrix = new JMenuItem("\u65B0\u5EFA\u77E9\u9635");
+		menuItemNewMatrix.addActionListener(new ActionListener() {
+
+			@Override
+			public void actionPerformed(ActionEvent e) {
+				new EditMatrix(GuiMain.this);
+			}
+		});
+		fileMenu.add(menuItemNewMatrix);
+		menuItemModifyMatrix.addActionListener(new ActionListener() {
+
+			@Override
+			public void actionPerformed(ActionEvent e) {
+				int index = list.getSelectedIndex();
+				if (index != -1)
+					new EditMatrix(index, GuiMain.this);
+				else
+					noSelectionCalculatingDialog();
+			}
+		});
+		fileMenu.add(menuItemModifyMatrix);
+		menuItemDeleteMatrix.addActionListener(new ActionListener() {
+
+			@Override
+			public void actionPerformed(ActionEvent e) {
+				int index = list.getSelectedIndex();
+				if (index == -1)
+					noSelectionCalculatingDialog();
+				else {
+					JOptionPane.showConfirmDialog(frame, "是否确认要删除？", "删除确认", JOptionPane.YES_NO_OPTION);
+					manager.delete(index);
+					updateListCore();
+				}
+			}
+		});
+		fileMenu.add(menuItemDeleteMatrix);
 		fileMenu.add(menuItemReloadAll);
 
 		JMenuItem menuItemSaveAllToFile = new JMenuItem("\u4FDD\u5B58\u5217\u8868\u5230\u78C1\u76D8");
@@ -289,7 +328,8 @@ public class GuiMain {
 			@Override
 			public void actionPerformed(ActionEvent e) {
 				int index = list.getSelectedIndex();
-				if (index != -1 && manager.getMatrix(index).detCal().getA() == 0)
+				if (index != -1
+						&& (!manager.getMatrix(index).isSquare() || manager.getMatrix(index).detCal().getA() == 0))
 					JOptionPane.showMessageDialog(frame, "所选矩阵不可逆", "错误", JOptionPane.ERROR_MESSAGE);
 				else
 					oneMatrixToOneMatrix(mat -> mat.getInverse());
@@ -298,6 +338,7 @@ public class GuiMain {
 		menuMatrixTransform.add(mntmGetInverse);
 
 		JMenuItem menuItemGetMinor = new JMenuItem("\u751F\u6210\u4F59\u5B50\u9635");
+		menuItemGetMinor.setEnabled(false);
 		menuMatrixTransform.add(menuItemGetMinor);
 		mntmScalar.setEnabled(false);
 		menuMatrixTransform.add(mntmScalar);
@@ -341,10 +382,24 @@ public class GuiMain {
 
 			@Override
 			public void actionPerformed(ActionEvent e) {
-				JOptionPane.showMessageDialog(frame, "Author:Sochiji\nE-mail:song_zs@qq.com\nGitHub:sochiji", "About",
+				JOptionPane.showMessageDialog(frame,
+						"Version: Alpha 0.2\nAuthor: Sochiji\nE-mail: song_zs@qq.com\nGitHub: sochiji", "About",
 						JOptionPane.PLAIN_MESSAGE);
 			}
 		});
+
+		JMenuItem menuItemHowToUse = new JMenuItem("\u5982\u4F55\u4F7F\u7528");
+		menuItemHowToUse.addActionListener(new ActionListener() {
+
+			@Override
+			public void actionPerformed(ActionEvent e) {
+				JOptionPane.showMessageDialog(frame,
+						"将矩阵的信息写成扩展名为\".matdat\"的文本文件，放在当前目录下的\"AlgebraData\"文件夹中。\n程序启动时会从磁盘中读取一次矩阵列表，也可以手动刷新。\n格式：第一行两个正整数，中间用空格隔开，表示行数和列数。\n接下来按照矩阵排列的格式写有理数，每个有理数之间用空格隔开，分子和分母之间是\"/\"\n",
+						"帮助", JOptionPane.PLAIN_MESSAGE);
+
+			}
+		});
+		menuHelp.add(menuItemHowToUse);
 		menuHelp.add(menuItemAbout);
 		updateListCore();
 		frame.getContentPane().setLayout(null);
@@ -424,10 +479,10 @@ public class GuiMain {
 			@Override
 			public void actionPerformed(ActionEvent e) {
 				try {
-					String addition = Fraction.valueOf(
-							JOptionPane.showInputDialog(frame, "输入新有理数变量", "新有理数变量", JOptionPane.QUESTION_MESSAGE))
-							.toString();
-					fractionListCore.addElement(addition);
+					String addition = JOptionPane.showInputDialog(frame, "输入新有理数变量", "新有理数变量",
+							JOptionPane.QUESTION_MESSAGE);
+					if (addition != null)
+						fractionListCore.addElement(addition);
 				} catch (NumberFormatException f) {
 					JOptionPane.showMessageDialog(frame, "有理数格式无法识别。", "错误", JOptionPane.ERROR_MESSAGE);
 				}
@@ -470,11 +525,16 @@ public class GuiMain {
 		int index = list.getSelectedIndex();
 		if (index >= 0) {
 			Matrix result = op.operate(manager.getMatrix(index));
-			String name = setNewMatrixNameDialog(frame);
+			String name = getUniqueName();
 			if (name == null)
 				return;
 			manager.add(result, name);
 			updateListCore(listCore, manager.getNameList());
+			try {
+				manager.saveToFile(list.getLastVisibleIndex());
+			} catch (IOException e) {
+				JOptionPane.showMessageDialog(frame, name + ".matdat保存失败。", "错误", JOptionPane.ERROR_MESSAGE);
+			}
 		} else
 			noSelectionCalculatingDialog();
 	}
@@ -494,20 +554,49 @@ public class GuiMain {
 
 	}
 
-	private void updateListCore() {
+	public void updateListCore() {
 		updateListCore(listCore, manager.getNameList());
 	}
 
-	private void updateListCore(DefaultListModel<String> listCore, String[] nameList) {
+	public void updateListCore(DefaultListModel<String> listCore, String[] nameList) {
 		listCore.clear();
 		for (String x : nameList)
 			listCore.addElement(x);
 	}
 
-	private void updateViewer(int index) {
+	void updateViewer(int index) {
 		if (index != -1)
 			textArea.setText(manager.getMatrix(index).toString());
 		else
 			textArea.setText("");
+	}
+
+	private boolean checkSameName(String matrixName) {
+		boolean ret = false;
+		String[] nameList = manager.getNameList();
+		for (String x : nameList)
+			if (matrixName.equalsIgnoreCase(x))
+				ret = true;
+		return ret;
+	}
+
+	private String getUniqueName() {
+		String name;
+		boolean isLegal;
+		do {
+			isLegal = true;
+			name = setNewMatrixNameDialog(frame);
+			if (name == null)
+				return null;
+			if (name.equals("")) {
+				JOptionPane.showMessageDialog(frame, "矩阵名不能为空。", "错误", JOptionPane.ERROR_MESSAGE);
+				isLegal = false;
+			}
+			if (checkSameName(name)) {
+				JOptionPane.showMessageDialog(frame, "不允许名称重复。", "错误", JOptionPane.ERROR_MESSAGE);
+				isLegal = false;
+			}
+		} while (!isLegal);
+		return name;
 	}
 }
